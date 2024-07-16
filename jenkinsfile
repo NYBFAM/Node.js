@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        KUBERNETES_CREDENTIALS_ID = 'kubeconfig-credentials'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/your-repo/simple-node-app.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    dockerImage = docker.build("your-dockerhub-username/simple-node-app")
+                }
+            }
+        }
+        stage('Test') {
+            steps {
+                sh 'docker run --rm your-dockerhub-username/simple-node-app npm test'
+            }
+        }
+        stage('Push to Registry') {
+            steps {
+                script {
+                    docker.withRegistry('', DOCKER_CREDENTIALS_ID) {
+                        dockerImage.push('latest')
+                    }
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    withCredentials([file(credentialsId: KUBERNETES_CREDENTIALS_ID, variable: 'KUBECONFIG')]) {
+                        sh 'kubectl --kubeconfig=$KUBECONFIG apply -f deployment.yaml'
+                        sh 'kubectl --kubeconfig=$KUBECONFIG apply -f service.yaml'
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
